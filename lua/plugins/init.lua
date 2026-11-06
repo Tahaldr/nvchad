@@ -131,6 +131,16 @@ return {
     keys = require("configs.flash").keys,
   },
 
+  -- Notes + todo list in ~/notes (keys: <leader>j..., see configs/obsidian.lua)
+  {
+    "obsidian-nvim/obsidian.nvim",
+    version = "*",
+    cmd = "Obsidian",
+    ft = "markdown",
+    keys = require("configs.obsidian").keys,
+    opts = require("configs.obsidian").opts,
+  },
+
   -- test new blink
   { import = "nvchad.blink.lazyspec" },
 
