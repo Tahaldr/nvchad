@@ -131,14 +131,18 @@ return {
     keys = require("configs.flash").keys,
   },
 
-  -- Notes + todo list in ~/notes (keys: <leader>j..., see configs/obsidian.lua)
+  -- Todos + notes in a popup from anywhere (keys and folder: configs/notes.lua)
   {
-    "obsidian-nvim/obsidian.nvim",
-    version = "*",
-    cmd = "Obsidian",
+    "backdround/global-note.nvim",
+    cmd = { "Todo", "Notes" },
+    keys = require("configs.notes").keys,
+    opts = require("configs.notes").global_note,
+  },
+  -- Nice checkboxes, priorities and archive inside todo.md / notes.md
+  {
+    "bngarren/checkmate.nvim",
     ft = "markdown",
-    keys = require("configs.obsidian").keys,
-    opts = require("configs.obsidian").opts,
+    opts = require("configs.notes").checkmate,
   },
 
   -- test new blink
