@@ -56,12 +56,26 @@ local function width_of(chunks)
 end
 
 -- o.input: one-line text box (o.default); otherwise a yes / no question (o.text)
+-- a dark see-through layer over everything, so the dialog stands out
+local function backdrop()
+  local buf = vim.api.nvim_create_buf(false, true)
+  local win = vim.api.nvim_open_win(buf, false, {
+    relative = "editor", style = "minimal", focusable = false, zindex = 150,
+    width = vim.o.columns, height = vim.o.lines, row = 0, col = 0,
+  })
+  vim.api.nvim_set_hl(0, "NotebookBackdrop", { bg = "#000000" })
+  vim.wo[win].winhighlight = "Normal:NotebookBackdrop"
+  vim.wo[win].winblend = 45
+  return win
+end
+
 local function dialog(o)
+  local shade = backdrop()
   local buf = vim.api.nvim_create_buf(false, true)
   local foot = hints(o.hints)
   local w = math.max(44, width_of(foot) + 4, vim.fn.strdisplaywidth(o.text or o.default or "") + 8)
   local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor", style = "minimal", border = "rounded",
+    relative = "editor", style = "minimal", border = "rounded", zindex = 200,
     width = w, height = 1, row = math.floor(vim.o.lines / 2) - 2, col = math.floor((vim.o.columns - w) / 2),
     title = { { " " .. o.title .. " ", o.title_hl or "Title" } }, title_pos = "center",
     footer = foot, footer_pos = "center",
@@ -73,6 +87,7 @@ local function dialog(o)
     done = true
     vim.cmd "stopinsert"
     if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
+    if vim.api.nvim_win_is_valid(shade) then vim.api.nvim_win_close(shade, true) end
     vim.schedule(function() o.on_done(value) end)
   end
   local k = { buffer = buf, nowait = true }
@@ -96,7 +111,7 @@ end
 -- popup
 -- ---------------------------------------------------------------------------
 local function is_todo(line)
-  return line:match "^%s*[-*+] [□■]" or line:match "^%s*[-*+] %[[ xX]%]"
+  return line:match "^%s*[-*+] %[[ xX]%]"
 end
 
 local function open_popup(path, kind)
@@ -271,17 +286,25 @@ function M.pick(kind)
         end
         vim.schedule(function() open_popup(it.path, kind) end)
       end)
-      -- close the picker first, then open the dialog once it's gone
+      -- open the dialog on top of the picker (which stays visible behind it);
+      -- when the dialog is done, the picker closes and reopens with the change
       local function on_item(fn)
         return function()
           local it = selected()
           if not it or it.new then return end
-          actions.close(bufnr)
-          vim.schedule(function() fn(it) end)
+          -- telescope closes itself when its prompt loses focus; keep it open while the dialog shows
+          vim.api.nvim_clear_autocmds { group = "PickerInsert", event = "BufLeave", buffer = bufnr }
+          vim.cmd "stopinsert"
+          vim.schedule(function()
+            fn(it, function()
+              pcall(actions.close, bufnr)
+              reopen()
+            end)
+          end)
         end
       end
-      local ren = on_item(function(it) rename(it.path, kind, reopen) end)
-      local del = on_item(function(it) delete(it.path, reopen) end)
+      local ren = on_item(function(it, after) rename(it.path, kind, after) end)
+      local del = on_item(function(it, after) delete(it.path, after) end)
       for _, key in ipairs { "<C-e>", "<M-r>" } do map({ "i", "n" }, key, ren) end
       for _, key in ipairs { "<C-d>", "<M-d>" } do map({ "i", "n" }, key, del) end
       return true
@@ -294,9 +317,22 @@ end
 -- ---------------------------------------------------------------------------
 M.checkmate = {
   files = { "todo", "TODO", "todo.md", "TODO.md", "*.todo", "*.todo.md", "Notebook/**/*.md" },
+  -- keep the real [ ] / [x] in the buffer: render-markdown draws them as □ / ■ and
+  -- then doesn't add a bullet in front (it would with checkmate's own symbols)
   todo_states = {
-    unchecked = { marker = "□" },
-    checked = { marker = "■" },
+    unchecked = { marker = "[ ]" },
+    checked = { marker = "[x]" },
+  },
+  -- @priority(low / medium / high) colors, muted onedark instead of the bright defaults
+  metadata = {
+    priority = {
+      style = function(ctx)
+        local v = ctx.value:lower()
+        if v == "high" then return { fg = "#e06c75", bold = true } end
+        if v == "medium" then return { fg = "#d19a66" } end
+        return { fg = "#61afef" }
+      end,
+    },
   },
 }
 

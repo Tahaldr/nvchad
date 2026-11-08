@@ -25,6 +25,11 @@ return {
       require("render-markdown").setup {
         enabled = true,
         file_types = { "markdown" },
+        -- checkboxes: empty / filled square (the bullet before a checkbox is hidden)
+        checkbox = {
+          unchecked = { icon = "□ " },
+          checked = { icon = "■ ", scope_highlight = "Comment" }, -- done items fade out
+        },
         -- you can add more config keys here as desired
       }
     end,
