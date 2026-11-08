@@ -35,7 +35,7 @@ local function file_name(title)
 end
 
 -- ---------------------------------------------------------------------------
--- small dialogs (rename / new title / delete), drawn like the popups
+-- helpers for the hint line in the popup border
 -- ---------------------------------------------------------------------------
 -- key hints for a border: { {"key", "what"}, ... } -> " key what  ·  key what "
 local function hints(list)
@@ -55,56 +55,12 @@ local function width_of(chunks)
   return n
 end
 
--- o.input: one-line text box (o.default); otherwise a yes / no question (o.text)
--- a dark see-through layer over everything, so the dialog stands out
-local function backdrop()
-  local buf = vim.api.nvim_create_buf(false, true)
-  local win = vim.api.nvim_open_win(buf, false, {
-    relative = "editor", style = "minimal", focusable = false, zindex = 150,
-    width = vim.o.columns, height = vim.o.lines, row = 0, col = 0,
-  })
-  vim.api.nvim_set_hl(0, "NotebookBackdrop", { bg = "#000000" })
-  vim.wo[win].winhighlight = "Normal:NotebookBackdrop"
-  vim.wo[win].winblend = 45
-  return win
-end
-
-local function dialog(o)
-  local shade = backdrop()
-  local buf = vim.api.nvim_create_buf(false, true)
-  local foot = hints(o.hints)
-  local w = math.max(44, width_of(foot) + 4, vim.fn.strdisplaywidth(o.text or o.default or "") + 8)
-  local win = vim.api.nvim_open_win(buf, true, {
-    relative = "editor", style = "minimal", border = "rounded", zindex = 200,
-    width = w, height = 1, row = math.floor(vim.o.lines / 2) - 2, col = math.floor((vim.o.columns - w) / 2),
-    title = { { " " .. o.title .. " ", o.title_hl or "Title" } }, title_pos = "center",
-    footer = foot, footer_pos = "center",
-  })
-  if o.border_hl then vim.wo[win].winhighlight = "FloatBorder:" .. o.border_hl end
-  local done = false
-  local function finish(value)
-    if done then return end
-    done = true
-    vim.cmd "stopinsert"
-    if vim.api.nvim_win_is_valid(win) then vim.api.nvim_win_close(win, true) end
-    if vim.api.nvim_win_is_valid(shade) then vim.api.nvim_win_close(shade, true) end
-    vim.schedule(function() o.on_done(value) end)
-  end
-  local k = { buffer = buf, nowait = true }
-  if o.input then
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { o.default or "" })
-    vim.cmd "startinsert!"
-    vim.keymap.set({ "i", "n" }, "<CR>", function() finish(vim.trim(vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] or "")) end, k)
-    vim.keymap.set({ "i", "n" }, "<Esc>", function() finish(nil) end, k)
-    vim.keymap.set("n", "q", function() finish(nil) end, k)
-  else
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "  " .. o.text })
-    vim.bo[buf].modifiable = false
-    for _, key in ipairs { "y", "Y" } do vim.keymap.set("n", key, function() finish(true) end, k) end
-    for _, key in ipairs { "n", "N", "q", "<Esc>" } do vim.keymap.set("n", key, function() finish(false) end, k) end
-  end
-  -- clicking or jumping away cancels
-  vim.api.nvim_create_autocmd("WinLeave", { buffer = buf, once = true, callback = function() finish(nil) end })
+-- ask in the command line; nil when cancelled with Esc
+local function ask(prompt, default)
+  local ok, v = pcall(vim.fn.input, { prompt = prompt, default = default or "", cancelreturn = "" })
+  vim.cmd "redraw"
+  if not ok or v == "" then return nil end
+  return vim.trim(v)
 end
 
 -- ---------------------------------------------------------------------------
@@ -179,53 +135,35 @@ local function close_buffer(path)
   if b ~= -1 then pcall(vim.api.nvim_buf_delete, b, { force = true }) end
 end
 
-local function create(kind, reopen)
-  dialog {
-    input = true,
-    title = kinds[kind].icon .. " New " .. (kind == "todos" and "todo list" or "note"),
-    hints = { { "enter", "create" }, { "esc", "cancel" } },
-    on_done = function(title)
-      if not title or title == "" then return reopen and reopen() end
-      local path = folder(kind) .. "/" .. file_name(title) .. ".md"
-      if vim.fn.filereadable(path) == 0 then vim.fn.writefile({ "# " .. title, "", kinds[kind].start }, path) end
-      open_popup(path, kind)
-    end,
-  }
+local function create(kind)
+  local title = ask(kinds[kind].icon .. " New " .. (kind == "todos" and "todo list" or "note") .. " title: ")
+  if not title or title == "" then return end
+  local path = folder(kind) .. "/" .. file_name(title) .. ".md"
+  if vim.fn.filereadable(path) == 0 then vim.fn.writefile({ "# " .. title, "", kinds[kind].start }, path) end
+  open_popup(path, kind)
 end
 
-local function rename(path, kind, reopen)
+local function rename(path, kind)
   local old = title_of(path)
-  dialog {
-    input = true, default = old,
-    title = "󰏫 Rename",
-    hints = { { "enter", "save" }, { "esc", "cancel" } },
-    on_done = function(title)
-      if title and title ~= "" and title ~= old then
-        local lines = vim.fn.readfile(path)
-        if lines[1] and lines[1]:match "^#%s" then lines[1] = "# " .. title else table.insert(lines, 1, "# " .. title) end
-        close_buffer(path)
-        vim.fn.writefile(lines, path)
-        local new = folder(kind) .. "/" .. file_name(title) .. ".md"
-        -- only upper/lowercase changed is the same file on Windows: renaming still works
-        if new ~= path and (new:lower() == path:lower() or vim.fn.filereadable(new) == 0) then
-          os.rename(path, new)
-        end
-      end
-      reopen()
-    end,
-  }
+  local title = ask("󰏫 Rename: ", old)
+  if not title or title == "" or title == old then return end
+  local lines = vim.fn.readfile(path)
+  if lines[1] and lines[1]:match "^#%s" then lines[1] = "# " .. title else table.insert(lines, 1, "# " .. title) end
+  close_buffer(path)
+  vim.fn.writefile(lines, path)
+  local new = folder(kind) .. "/" .. file_name(title) .. ".md"
+  -- only upper/lowercase changed is the same file on Windows: renaming still works
+  if new ~= path and (new:lower() == path:lower() or vim.fn.filereadable(new) == 0) then
+    os.rename(path, new)
+  end
 end
 
-local function delete(path, reopen)
-  dialog {
-    title = "󰆴 Delete", title_hl = "DiagnosticError", border_hl = "DiagnosticError",
-    text = 'Delete "' .. title_of(path) .. '"?',
-    hints = { { "y", "delete" }, { "n", "keep" } },
-    on_done = function(yes)
-      if yes then close_buffer(path); os.remove(path) end
-      reopen()
-    end,
-  }
+local function delete(path)
+  local answer = ask('󰆴 Delete "' .. title_of(path) .. '"? (y/n) ')
+  if answer and answer:lower():sub(1, 1) == "y" then
+    close_buffer(path)
+    os.remove(path)
+  end
 end
 
 function M.pick(kind)
@@ -282,29 +220,22 @@ function M.pick(kind)
             if vim.fn.filereadable(path) == 0 then vim.fn.writefile({ "# " .. typed, "", k.start }, path) end
             return open_popup(path, kind)
           end
-          return vim.schedule(function() create(kind, reopen) end)
+          return vim.schedule(function() create(kind) end)
         end
         vim.schedule(function() open_popup(it.path, kind) end)
       end)
-      -- open the dialog on top of the picker (which stays visible behind it);
-      -- when the dialog is done, the picker closes and reopens with the change
+      -- ask in the command line while the picker stays open, then refresh the list
       local function on_item(fn)
         return function()
           local it = selected()
           if not it or it.new then return end
-          -- telescope closes itself when its prompt loses focus; keep it open while the dialog shows
-          vim.api.nvim_clear_autocmds { group = "PickerInsert", event = "BufLeave", buffer = bufnr }
-          vim.cmd "stopinsert"
-          vim.schedule(function()
-            fn(it, function()
-              pcall(actions.close, bufnr)
-              reopen()
-            end)
-          end)
+          fn(it)
+          actions.close(bufnr)
+          reopen()
         end
       end
-      local ren = on_item(function(it, after) rename(it.path, kind, after) end)
-      local del = on_item(function(it, after) delete(it.path, after) end)
+      local ren = on_item(function(it) rename(it.path, kind) end)
+      local del = on_item(function(it) delete(it.path) end)
       for _, key in ipairs { "<C-e>", "<M-r>" } do map({ "i", "n" }, key, ren) end
       for _, key in ipairs { "<C-d>", "<M-d>" } do map({ "i", "n" }, key, del) end
       return true
