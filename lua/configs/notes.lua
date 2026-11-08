@@ -86,7 +86,7 @@ local function open_popup(path, kind)
   vim.bo[buf].buflisted = false
   -- the keys you can use, shown in the bottom border
   local foot = hints {
-    { "enter", "tick" }, { "o", "new todo" }, { "spc Tp", "priority" }, { "spc Ta", "archive done" }, { "q", "close" },
+    { "enter", "tick" }, { "o", "new todo" }, { "<leader>Tp", "priority" }, { "<leader>Ta", "archive done" }, { "q", "close" },
   }
   local W, H = vim.o.columns, vim.o.lines
   local w = math.min(W - 4, math.max(math.floor(W * 0.6), width_of(foot) + 4))
