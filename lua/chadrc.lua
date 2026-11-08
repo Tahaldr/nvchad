@@ -40,7 +40,7 @@ M.nvdash = {
     { txt = "  Find File", keys = "ff", cmd = "Telescope find_files" },
     { txt = "  Recent Files", keys = "fo", cmd = "Telescope oldfiles" },
     { txt = "󰈭  Find Word", keys = "fw", cmd = "Telescope live_grep" },
-    { txt = "󰄲  Todo", keys = "jt", cmd = "Todo" },
+    { txt = "󰄲  Todo", keys = "jt", cmd = "lua require('configs.notes').pick('todos')" },
     { txt = "󱥚  Themes", keys = "th", cmd = ":lua require('nvchad.themes').open()" },
     { txt = "  Mappings", keys = "ch", cmd = "NvCheatsheet" },
   },

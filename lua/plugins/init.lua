@@ -131,17 +131,12 @@ return {
     keys = require("configs.flash").keys,
   },
 
-  -- Todos + notes in a popup from anywhere (keys and folder: configs/notes.lua)
-  {
-    "backdround/global-note.nvim",
-    cmd = { "Todo", "Notes" },
-    keys = require("configs.notes").keys,
-    opts = require("configs.notes").global_note,
-  },
-  -- Nice checkboxes, priorities and archive inside todo.md / notes.md
+  -- Todo lists + notes in popups (keys, folder and picker: configs/notes.lua)
+  -- checkmate draws the boxes, priorities and archive inside them
   {
     "bngarren/checkmate.nvim",
     ft = "markdown",
+    keys = require("configs.notes").keys,
     opts = require("configs.notes").checkmate,
   },
 
