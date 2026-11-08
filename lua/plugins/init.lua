@@ -145,6 +145,28 @@ return {
     opts = require("configs.notes").checkmate,
   },
 
+  -- lazygit in a popup: <leader>gg (q closes it)
+  {
+    "kdheepak/lazygit.nvim",
+    cmd = { "LazyGit", "LazyGitCurrentFile", "LazyGitLog" },
+    dependencies = { "nvim-lua/plenary.nvim" },
+    keys = {
+      { "<leader>gg", "<cmd>LazyGit<cr>", desc = "LazyGit" },
+      { "<leader>gl", "<cmd>LazyGitLog<cr>", desc = "LazyGit log" },
+    },
+    init = function()
+      vim.g.lazygit_floating_window_scaling_factor = 0.9
+      vim.g.lazygit_floating_window_border_chars = { "╭", "─", "╮", "│", "╯", "─", "╰", "│" }
+      -- your terminal <Esc> mapping (leave terminal mode) would steal Esc from lazygit; give it back there
+      vim.api.nvim_create_autocmd("FileType", {
+        pattern = "lazygit",
+        callback = function(ev)
+          vim.keymap.set("t", "<Esc>", "<Esc>", { buffer = ev.buf, nowait = true })
+        end,
+      })
+    end,
+  },
+
   -- test new blink
   { import = "nvchad.blink.lazyspec" },
 
