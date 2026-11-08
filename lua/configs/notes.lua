@@ -143,7 +143,20 @@ function M.pick(kind)
       end,
     },
     sorter = conf.generic_sorter {},
-    previewer = conf.file_previewer {},
+    -- preview the highlighted file ("+ New" has no file, so it gets a short hint instead)
+    previewer = require("telescope.previewers").new_buffer_previewer {
+      title = "Preview",
+      define_preview = function(self, entry)
+        local buf = self.state.bufnr
+        if entry.value.new then
+          vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "Enter: type a title for a new one.", "", "Or type a title above that matches nothing and press Enter." })
+          return
+        end
+        local ok, lines = pcall(vim.fn.readfile, entry.path)
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, ok and lines or {})
+        vim.bo[buf].filetype = "markdown"
+      end,
+    },
     attach_mappings = function(bufnr, map)
       actions.select_default:replace(function()
         local it = selected()
