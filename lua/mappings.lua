@@ -38,8 +38,19 @@ map("n", "<Esc>", "<cmd>noh<CR><cmd>Noice dismiss<CR>", { desc = "Clear highligh
 map("n", "gp", "<cmd>Lspsaga peek_definition<CR>", { desc = "Peek definition" })
 map("n", "<leader>o", "<cmd>Lspsaga outline<CR>", { desc = "File outline" })
 
--- Run the current Python file in a floating terminal (reuses the same window on each run)
+-- Run the current file in a floating terminal (reuses the same window on each run)
+-- Which program runs each file type (to add a language: filetype = "program")
+local runners = {
+  python = "python",
+  javascript = "node",
+}
+
 map("n", "<leader>rr", function()
+  local program = runners[vim.bo.filetype]
+  if not program then
+    vim.notify("No runner for filetype: " .. vim.bo.filetype, vim.log.levels.WARN)
+    return
+  end
   vim.cmd "w" -- save the file first
   require("nvchad.term").runner {
     id = "runner",
@@ -49,7 +60,7 @@ map("n", "<leader>rr", function()
     --   "vsp"   = split on the right side (code stays visible on the left)
     pos = "float",
     cmd = function()
-      return "python " .. vim.fn.shellescape(vim.fn.expand "%:p")
+      return program .. " " .. vim.fn.shellescape(vim.fn.expand "%:p") -- e.g. node "C:\...\file.js"
     end,
   }
-end, { desc = "Run current Python file" })
+end, { desc = "Run current file (Python / JS)" })
