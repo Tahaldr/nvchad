@@ -37,3 +37,15 @@ map("n", "<Esc>", "<cmd>noh<CR><cmd>Noice dismiss<CR>", { desc = "Clear highligh
 -- Lspsaga
 map("n", "gp", "<cmd>Lspsaga peek_definition<CR>", { desc = "Peek definition" })
 map("n", "<leader>o", "<cmd>Lspsaga outline<CR>", { desc = "File outline" })
+
+-- Run the current Python file in a floating terminal (reuses the same window on each run)
+map("n", "<leader>rr", function()
+  vim.cmd "w" -- save the file first
+  require("nvchad.term").runner {
+    id = "runner",
+    pos = "float", -- or "sp" (bottom split) / "vsp" (side split)
+    cmd = function()
+      return "python " .. vim.fn.shellescape(vim.fn.expand "%:p")
+    end,
+  }
+end, { desc = "Run current Python file" })
