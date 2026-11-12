@@ -43,7 +43,11 @@ map("n", "<leader>rr", function()
   vim.cmd "w" -- save the file first
   require("nvchad.term").runner {
     id = "runner",
-    pos = "float", -- or "sp" (bottom split) / "vsp" (side split)
+    -- Terminal style: replace "float" below with one of these
+    --   "float" = pop-up window in the middle of the screen
+    --   "sp"    = split at the bottom (code stays visible above)
+    --   "vsp"   = split on the right side (code stays visible on the left)
+    pos = "float",
     cmd = function()
       return "python " .. vim.fn.shellescape(vim.fn.expand "%:p")
     end,
