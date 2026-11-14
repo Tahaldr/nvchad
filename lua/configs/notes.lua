@@ -6,7 +6,8 @@ local root = "~/Documents/Coding/Notebook"
 --   In the picker:  enter open   "+ New" entry makes one (asks for a title)
 --                   ctrl+e rename   ctrl+d delete
 --   In the popup (keys shown in its bottom border):
---     enter tick / untick   o new todo   q / Esc close (saves)
+--     enter tick / untick   o new todo   s new sub-todo   tab fold / unfold sub-todos
+--     > / < indent / outdent   q / Esc close (saves)
 --     <leader>Tp @priority   <leader>Ta archive done ones   (more checkmate keys: <leader>T...)
 local M = {}
 
@@ -70,6 +71,62 @@ local function is_todo(line)
   return line:match "^%s*[-*+] %[[ xX]%]"
 end
 
+local function indent_of(line) return #line:match "^%s*" end
+local function blank(line) return line:match "^%s*$" ~= nil end
+
+-- last line of the todo on row r plus all its sub-todos (anything indented deeper below it)
+local function subtree_end(buf, r)
+  local lines = vim.api.nvim_buf_get_lines(buf, r - 1, -1, false)
+  local base, last = indent_of(lines[1]), r
+  for i = 2, #lines do
+    if not blank(lines[i]) then
+      if indent_of(lines[i]) <= base then break end
+      last = r + i - 1
+    end
+  end
+  return last
+end
+
+-- add a todo after the one under the cursor (after its sub-todos too), sub = one level deeper
+local function add_todo(buf, sub)
+  local r = vim.api.nvim_win_get_cursor(0)[1]
+  local line = vim.api.nvim_get_current_line()
+  if not is_todo(line) then return vim.api.nvim_feedkeys("o- [ ] ", "n", false) end
+  local last = subtree_end(buf, r)
+  local ind = indent_of(line)
+  if sub then
+    -- line up with existing sub-todos, else 2 spaces deeper
+    local next_line = last > r and vim.api.nvim_buf_get_lines(buf, r, r + 1, false)[1]
+    ind = next_line and indent_of(next_line) or ind + 2
+    if vim.fn.foldclosed(r + 1) ~= -1 then vim.cmd((r + 1) .. "foldopen!") end
+  end
+  vim.api.nvim_buf_set_lines(buf, last, last, false, { string.rep(" ", ind) .. "- [ ] " })
+  vim.api.nvim_win_set_cursor(0, { last + 1, 0 })
+  vim.cmd "startinsert!"
+end
+
+-- Tab: on a todo with sub-todos, fold / unfold them; on a sub-todo, fold it into its parent
+local function toggle_fold(buf)
+  local r = vim.api.nvim_win_get_cursor(0)[1]
+  local line = vim.api.nvim_get_current_line()
+  if subtree_end(buf, r) > r then
+    if vim.fn.foldclosed(r + 1) ~= -1 then vim.cmd((r + 1) .. "foldopen") else vim.cmd((r + 1) .. "foldclose") end
+  elseif indent_of(line) > 0 and vim.fn.foldlevel(r) > 0 then
+    vim.cmd "foldclose"
+    vim.api.nvim_win_set_cursor(0, { math.max(1, vim.fn.foldclosed(r) - 1), 0 })
+  end
+end
+
+-- what a folded group shows: "  󰅂 3 sub-todos"
+function M.foldtext()
+  local first = vim.fn.getline(vim.v.foldstart)
+  local n = 0
+  for l = vim.v.foldstart, vim.v.foldend do
+    if is_todo(vim.fn.getline(l)) then n = n + 1 end
+  end
+  return string.rep(" ", indent_of(first)) .. "󰅂 " .. n .. " sub-todo" .. (n == 1 and "" or "s")
+end
+
 local function open_popup(path, kind)
   -- already open: just jump to it
   for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
@@ -86,7 +143,7 @@ local function open_popup(path, kind)
   vim.bo[buf].buflisted = false
   -- the keys you can use, shown in the bottom border
   local foot = hints {
-    { "enter", "tick" }, { "o", "new todo" }, { "<leader>Tp", "priority" }, { "<leader>Ta", "archive done" }, { "q", "close" },
+    { "enter", "tick" }, { "o", "new" }, { "s", "sub-todo" }, { "tab", "fold" }, { "<leader>Tp", "priority" }, { "<leader>Ta", "archive" }, { "q", "close" },
   }
   local W, H = vim.o.columns, vim.o.lines
   local w = math.min(W - 4, math.max(math.floor(W * 0.6), width_of(foot) + 4))
@@ -98,6 +155,17 @@ local function open_popup(path, kind)
     width = w, height = h, row = math.floor((H - h) / 2) - 1, col = math.floor((W - w) / 2),
   })
   vim.w[win].notebook = true
+  -- sub-todos are indented 2 spaces; fold by indent so each parent can collapse its sub-todos
+  vim.bo[buf].shiftwidth, vim.bo[buf].expandtab = 2, true
+  local function folds()
+    if not vim.api.nvim_win_is_valid(win) then return end
+    local wo = vim.wo[win]
+    wo.foldmethod, wo.foldenable, wo.foldlevel = "indent", true, 99
+    wo.foldtext = "v:lua.require'configs.notes'.foldtext()"
+    wo.fillchars = "fold: "
+  end
+  folds()
+  vim.schedule(folds) -- again after filetype plugins have had their say
   local function opts(desc) return { buffer = buf, nowait = true, desc = desc } end
   for _, key in ipairs { "q", "<Esc>" } do
     vim.keymap.set("n", key, function()
@@ -108,14 +176,23 @@ local function open_popup(path, kind)
   vim.keymap.set("n", "<CR>", function()
     if is_todo(vim.api.nvim_get_current_line()) then require("checkmate").toggle() else vim.cmd "normal! +" end
   end, opts "Tick / untick")
-  -- o starts a new todo below the cursor
-  vim.keymap.set("n", "o", function()
-    if is_todo(vim.api.nvim_get_current_line()) then
-      require("checkmate").create()
-    else
-      vim.api.nvim_feedkeys("o- [ ] ", "n", false)
-    end
-  end, opts "New todo")
+  -- o: new todo at the same level, s: new sub-todo under the one at the cursor
+  vim.keymap.set("n", "o", function() add_todo(buf, false) end, opts "New todo")
+  vim.keymap.set("n", "s", function() add_todo(buf, true) end, opts "New sub-todo")
+  -- Tab folds / unfolds sub-todos, Shift-Tab folds / unfolds all of them
+  vim.keymap.set("n", "<Tab>", function() toggle_fold(buf) end, opts "Fold sub-todos")
+  vim.keymap.set("n", "<S-Tab>", function()
+    vim.wo.foldlevel = vim.wo.foldlevel > 0 and 0 or 99
+  end, opts "Fold / unfold all")
+  -- > / < turn a todo into a sub-todo of the one above, or back (with its own sub-todos)
+  vim.keymap.set("n", ">", function()
+    local r = vim.api.nvim_win_get_cursor(0)[1]
+    vim.cmd(r .. "," .. subtree_end(buf, r) .. ">")
+  end, opts "Indent todo")
+  vim.keymap.set("n", "<", function()
+    local r = vim.api.nvim_win_get_cursor(0)[1]
+    vim.cmd(r .. "," .. subtree_end(buf, r) .. "<")
+  end, opts "Outdent todo")
   -- save on close; nested so checkmate turns □/■ back into [ ] / [x] in the file
   vim.api.nvim_create_autocmd("WinClosed", {
     pattern = tostring(win), once = true, nested = true,
@@ -254,7 +331,8 @@ M.checkmate = {
     unchecked = { marker = "[ ]" },
     checked = { marker = "[x]" },
   },
-  -- @priority(low / medium / high) colors, muted onedark instead of the bright defaults
+  -- @priority(low / medium / high) colors, muted onedark instead of the bright defaults.
+  -- Overriding a tag replaces checkmate's whole default for it, so key / choices must be here too.
   metadata = {
     priority = {
       style = function(ctx)
@@ -263,6 +341,12 @@ M.checkmate = {
         if v == "medium" then return { fg = "#d19a66" } end
         return { fg = "#61afef" }
       end,
+      get_value = function() return "medium" end,
+      choices = function() return { "low", "medium", "high" } end,
+      key = "<leader>Tp",
+      sort_order = 10,
+      jump_to_on_insert = "value",
+      select_on_insert = true,
     },
   },
 }
