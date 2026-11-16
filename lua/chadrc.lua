@@ -69,4 +69,8 @@ M.ui = {
   },
 }
 
+-- noice already shows signature help; NvChad's own one fights with it and
+-- jumps the cursor into the popup (kicking you out of insert mode)
+M.lsp = { signature = false }
+
 return M
