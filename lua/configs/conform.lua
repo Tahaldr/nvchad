@@ -20,7 +20,7 @@ local options = {
     blade = { "blade-formatter" },
 
     -- Python
-    -- python = { "black" },
+    python = { "ruff_organize_imports", "ruff_format" },
 
     -- Java
     java = { "google-java-format" },
@@ -29,10 +29,10 @@ local options = {
     lua = { "stylua" },
   },
 
-  -- format_on_save = {
-  --   lsp_fallback = true,
-  --   timeout_ms = 1000,
-  -- },
+  format_on_save = {
+    lsp_fallback = true,
+    timeout_ms = 3000,
+  },
 }
 
 return options
