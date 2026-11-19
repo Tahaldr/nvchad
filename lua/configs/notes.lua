@@ -1,6 +1,6 @@
 -- Todo lists + notes in a popup, from anywhere. Plain markdown files, checkmate draws the boxes.
 -- Everything lives in one folder. Change it here:
-local root = "~/Documents/Coding/Notebook"
+local root = "~/Documents/Notebook"
 
 --   <leader>jt  pick a todo list      <leader>jn  pick a note
 --   In the picker:  enter open   "+ New" entry makes one (asks for a title)
