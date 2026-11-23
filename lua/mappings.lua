@@ -64,3 +64,50 @@ map("n", "<leader>rr", function()
     end,
   }
 end, { desc = "Run current file (Python / JS)" })
+
+-- csv / tsv: read the file in csvlens (scoop install csvlens), full screen in a float.
+-- csvlens keys: hjkl move, / search, & filter rows, f freeze columns, w wrap, enter a cell, ? help.
+-- q closes it and you're back in the file.
+local function csvlens()
+  local file = vim.fn.expand "%:p"
+  if file == "" then
+    return vim.notify("csvlens: save the file first", vim.log.levels.WARN)
+  end
+  if vim.fn.executable "csvlens" == 0 then
+    return vim.notify("csvlens isn't installed: scoop install csvlens", vim.log.levels.WARN)
+  end
+  vim.cmd "silent! update" -- csvlens reads the file from disk
+  local cmd = { "csvlens", file }
+  if vim.bo.filetype == "tsv" or file:match "%.tsv$" then
+    table.insert(cmd, "-t")
+  end
+  local w, h = math.floor(vim.o.columns * 0.95), math.floor(vim.o.lines * 0.9)
+  local buf = vim.api.nvim_create_buf(false, true)
+  local win = vim.api.nvim_open_win(buf, true, {
+    relative = "editor",
+    width = w,
+    height = h,
+    col = math.floor((vim.o.columns - w) / 2),
+    row = math.floor((vim.o.lines - h) / 2) - 1,
+    style = "minimal",
+    border = "rounded",
+    title = " " .. vim.fn.fnamemodify(file, ":t") .. " ",
+    title_pos = "center",
+  })
+  vim.fn.jobstart(cmd, {
+    term = true,
+    on_exit = function()
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_close(win, true)
+      end
+      if vim.api.nvim_buf_is_valid(buf) then
+        vim.api.nvim_buf_delete(buf, { force = true })
+      end
+    end,
+  })
+  vim.keymap.set("t", "<Esc>", "<Esc>", { buffer = buf, nowait = true }) -- csvlens uses Esc itself
+  vim.cmd "startinsert"
+end
+
+vim.api.nvim_create_user_command("Csvlens", csvlens, { desc = "Read this csv in csvlens" })
+map("n", "<leader>cv", csvlens, { desc = "Read csv in csvlens" })

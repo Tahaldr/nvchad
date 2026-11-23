@@ -168,13 +168,6 @@ return {
     end,
   },
 
-  -- csv / tsv shown as aligned columns: :CsvViewToggle
-  {
-    "hat0uma/csvview.nvim",
-    cmd = { "CsvViewEnable", "CsvViewDisable", "CsvViewToggle" },
-    opts = { view = { display_mode = "border" } },
-  },
-
   -- test new blink
   { import = "nvchad.blink.lazyspec" },
 
