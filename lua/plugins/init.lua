@@ -168,15 +168,11 @@ return {
     end,
   },
 
-  -- Spreadsheets: csv / tsv shown as aligned columns (Excel files: configs/sheets.lua)
-  -- :CsvViewToggle switches it off and on
+  -- csv / tsv shown as aligned columns: :CsvViewToggle
   {
     "hat0uma/csvview.nvim",
-    ft = { "csv", "tsv" },
     cmd = { "CsvViewEnable", "CsvViewDisable", "CsvViewToggle" },
-    config = function()
-      require("configs.sheets").csvview()
-    end,
+    opts = { view = { display_mode = "border" } },
   },
 
   -- test new blink
