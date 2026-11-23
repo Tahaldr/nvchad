@@ -20,3 +20,6 @@ vim.api.nvim_create_autocmd("InsertLeave", {
     end)
   end,
 })
+
+-- Excel files open as tables (configs/sheets.lua)
+require "configs.sheets"
