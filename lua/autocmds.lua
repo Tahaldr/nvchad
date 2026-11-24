@@ -20,3 +20,6 @@ vim.api.nvim_create_autocmd("InsertLeave", {
     end)
   end,
 })
+
+-- undo one word at a time, like VS Code
+require "configs.undo"
